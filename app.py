@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Character Studio - Zero-Cost 2D to 3D + Talking Characters (Gradio UI)
+Character Studio - Zero-Cost 2D to 3D + Talking Characters
+Now with streaming chat via the official ollama Python library.
 """
 
 import gradio as gr
@@ -10,7 +11,6 @@ from rembg import remove
 from pathlib import Path
 import tempfile
 import sys
-import subprocess
 import datetime
 import os
 
@@ -18,8 +18,8 @@ sys.path.append(str(Path(__file__).parent / "TripoSR"))
 
 ROOT = Path(__file__).parent
 CHARACTERS_DIR = ROOT / "characters"
-EXAMPLES_DIR = ROOT / "examples"
 
+# ---------- 3D Generation ----------
 def get_triposr_model(local_dir: str = None, device: str = "cuda"):
     from tsr.system import TSR
     if local_dir and Path(local_dir).exists():
@@ -58,6 +58,7 @@ def generate_3d(image, resolution, local_model_path, progress=gr.Progress(track_
     except Exception as e:
         return None, f"Error: {e}"
 
+# ---------- Character Creation ----------
 def create_character(image, name, description):
     if image is None or not name or not name.strip():
         return "Please provide an image and a character name."
@@ -78,52 +79,84 @@ def list_characters():
         return []
     return sorted([d.name for d in CHARACTERS_DIR.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "personality.txt").exists()])
 
-def chat_with_character(character, message, history, model_name):
+# ---------- Streaming Chat (using official ollama library) ----------
+def chat_with_character_stream(character, message, history, model_name):
+    """
+    Streaming chat using the official ollama Python package.
+    Install with: pip install ollama
+    """
     if not character:
         history.append((message, "Please select a character first."))
-        return history, ""
+        yield history, ""
+        return
     if not message.strip():
-        return history, ""
+        yield history, ""
+        return
 
     personality_file = CHARACTERS_DIR / character / "personality.txt"
     if not personality_file.exists():
         history.append((message, f"No personality found for {character}."))
-        return history, ""
+        yield history, ""
+        return
 
     personality = personality_file.read_text().strip()
-    prompt = f"{personality}\n\nUser: {message}\n{character}:"
+
+    # Build messages for better quality
+    messages = [
+        {"role": "system", "content": personality},
+    ]
+    # Add previous history for context (keep last few turns)
+    for user_msg, bot_msg in history[-6:]:
+        messages.append({"role": "user", "content": user_msg})
+        messages.append({"role": "assistant", "content": bot_msg})
+    messages.append({"role": "user", "content": message})
+
+    history.append((message, ""))
+    yield history, ""
 
     try:
-        # Note: Full token streaming from Ollama via subprocess is limited.
-        # This version gets the complete reply. For true streaming, the ollama Python library is better.
-        result = subprocess.run(
-            ["ollama", "run", model_name, prompt],
-            capture_output=True, text=True, timeout=120
+        import ollama
+        stream = ollama.chat(
+            model=model_name,
+            messages=messages,
+            stream=True,
         )
-        reply = result.stdout.strip() or "(No response)"
-    except FileNotFoundError:
-        reply = "Ollama not found. Install from https://ollama.com and run: ollama pull llama3.1"
-    except subprocess.TimeoutExpired:
-        reply = "Response timed out."
+        full_reply = ""
+        for chunk in stream:
+            part = chunk.get("message", {}).get("content", "")
+            if part:
+                full_reply += part
+                history[-1] = (message, full_reply)
+                yield history, ""
+    except ImportError:
+        history[-1] = (message, "Please install the ollama package: pip install ollama")
+        yield history, ""
     except Exception as e:
-        reply = f"Error: {e}"
-
-    history.append((message, reply))
-    return history, ""
+        history[-1] = (message, f"Error: {e}\n\nMake sure Ollama is running and the model is pulled.")
+        yield history, ""
 
 def prepare_for_vrm_message():
-    return """**Prepare for VRM (Talking Avatar)**
+    return """### Prepare for VRM (Talking Avatar)
 
-1. Take your best cleaned + rigged GLB
-2. Open it in Blender
-3. Install the free VRM Add-on for Blender if needed
-4. Export as VRM (File → Export → VRM)
-5. Use the .vrm file in Amica, AITuber Kit, Three.js + three-vrm, or Unity (UniVRM)
+1. Take your best cleaned + rigged **GLB**
+2. Open it in **Blender**
+3. Make sure the free **VRM Add-on for Blender** is installed
+4. Go to File → Export → **VRM**
+5. Map humanoid bones if asked
+6. Save the `.vrm` file
 
-See docs/vrm_conversion_guide.md for detailed steps."""
+You can then load the VRM into:
+- Amica
+- AITuber Kit
+- Three.js + `@pixiv/three-vrm`
+- Unity (UniVRM)
 
+Full guide: `docs/vrm_conversion_guide.md`
+"""
+
+# ---------- UI ----------
 with gr.Blocks(title="Character Studio", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# Character Studio\nZero-Cost 2D → 3D Model + Talking Characters\n*Fully local after initial model download*")
+    gr.Markdown("# Character Studio\nZero-Cost 2D → 3D + Talking Characters\n*Local after initial model download*")
 
     with gr.Tab("Generate 3D"):
         with gr.Row():
@@ -132,15 +165,16 @@ with gr.Blocks(title="Character Studio", theme=gr.themes.Soft()) as demo:
                 resolution = gr.Slider(128, 320, value=256, step=32, label="Resolution")
                 local_model = gr.Textbox(label="Local TripoSR folder (optional)", placeholder="Leave empty for default cache")
                 gen_btn = gr.Button("Generate 3D Model", variant="primary")
-                gr.Markdown("**Example:** Use Cornelius MacIntyre (place `examples/cornelius_macintyre.png` in the repo)")
             with gr.Column():
                 output_model = gr.Model3D(label="3D Preview", height=380)
                 status = gr.Textbox(label="Status")
                 download = gr.File(label="Download GLB")
 
-        gen_btn.click(generate_3d, inputs=[input_image, resolution, local_model], outputs=[output_model, status]).then(
-            lambda p: p, inputs=output_model, outputs=download
-        )
+        gen_btn.click(
+            generate_3d,
+            inputs=[input_image, resolution, local_model],
+            outputs=[output_model, status]
+        ).then(lambda p: p, inputs=output_model, outputs=download)
 
     with gr.Tab("Create Character"):
         with gr.Row():
@@ -153,25 +187,34 @@ with gr.Blocks(title="Character Studio", theme=gr.themes.Soft()) as demo:
         create_btn.click(create_character, inputs=[char_image, char_name, char_desc], outputs=create_status)
 
     with gr.Tab("Talk"):
+        gr.Markdown("Chat with streaming replies (requires `pip install ollama` and Ollama running).")
         with gr.Row():
             character_dropdown = gr.Dropdown(choices=list_characters(), label="Select Character", interactive=True)
-            refresh_btn = gr.Button("Refresh", size="sm")
+            refresh_btn = gr.Button("Refresh List", size="sm")
             ollama_model = gr.Textbox(value="llama3.1", label="Ollama Model")
 
         chatbot = gr.Chatbot(label="Conversation", height=420)
         with gr.Row():
-            msg = gr.Textbox(label="Message", scale=5, placeholder="Type a message to the character...")
+            msg = gr.Textbox(label="Your message", scale=5, placeholder="Say something...")
             send_btn = gr.Button("Send", variant="primary", scale=1)
 
         refresh_btn.click(lambda: gr.Dropdown(choices=list_characters()), outputs=character_dropdown)
-        send_btn.click(chat_with_character, inputs=[character_dropdown, msg, chatbot, ollama_model], outputs=[chatbot, msg])
-        msg.submit(chat_with_character, inputs=[character_dropdown, msg, chatbot, ollama_model], outputs=[chatbot, msg])
+
+        send_btn.click(
+            chat_with_character_stream,
+            inputs=[character_dropdown, msg, chatbot, ollama_model],
+            outputs=[chatbot, msg]
+        )
+        msg.submit(
+            chat_with_character_stream,
+            inputs=[character_dropdown, msg, chatbot, ollama_model],
+            outputs=[chatbot, msg]
+        )
 
     with gr.Tab("Prepare for VRM"):
         gr.Markdown(prepare_for_vrm_message())
-        gr.Markdown("This tab is a quick reminder of the steps to turn your GLB into a talking-ready VRM avatar.")
 
-    gr.Markdown("---\n**Tip:** After creating a character, go to the Talk tab, refresh the list, and start chatting.")
+    gr.Markdown("---\n**Install for streaming chat:** `pip install ollama`")
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", share=False)
