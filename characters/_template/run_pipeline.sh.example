@@ -1,0 +1,21 @@
+#!/bin/bash
+# Template one-click pipeline
+# Copy this folder, rename it, replace the image, and update the variables below.
+
+CHARACTER_NAME="my_character"
+INPUT_IMAGE="source.png"
+RESOLUTION=320
+
+set -e
+OUT_DIR="output/${CHARACTER_NAME}"
+mkdir -p "$OUT_DIR"
+
+echo "Generating mesh for ${CHARACTER_NAME}..."
+python ../../../multi_image_to_3d.py "$INPUT_IMAGE" --out "$OUT_DIR" --res $RESOLUTION
+
+echo "Cleaning..."
+blender --background --python ../../../blender_cleanup_rig.py -- \
+  "$OUT_DIR"/*.glb \
+  "$OUT_DIR/${CHARACTER_NAME}_cleaned.glb"
+
+echo "Done. Remember to convert the best version to VRM for talking characters."
