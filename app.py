@@ -5,6 +5,7 @@ Now with streaming chat via the official ollama Python library.
 """
 
 import gradio as gr
+from scripts.gradio_rig_tab import add_skintokens_rig_tab  # optional, additive SkinTokens stage
 import torch
 from PIL import Image
 from rembg import remove
@@ -175,6 +176,8 @@ with gr.Blocks(title="Character Studio", theme=gr.themes.Soft()) as demo:
             inputs=[input_image, resolution, local_model],
             outputs=[output_model, status]
         ).then(lambda p: p, inputs=output_model, outputs=download)
+
+    add_skintokens_rig_tab(gr)
 
     with gr.Tab("Create Character"):
         with gr.Row():
