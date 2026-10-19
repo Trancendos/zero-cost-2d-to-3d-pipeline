@@ -8,6 +8,9 @@ from local_llm_rig_assist import DEFAULT,clamp,safe_base
 from rig_with_skintokens import validate_glb
 
 class RigContracts(unittest.TestCase):
+ def test_asset_manifest_schema_is_valid_json(self):
+  schema=json.loads((Path(__file__).resolve().parents[1]/"schemas"/"asset-manifest.schema.json").read_text(encoding="utf-8"))
+  self.assertEqual(schema["properties"]["schema"]["const"],"aaf.asset-manifest.v1")
  def setUp(self):
   self.info={"available":True,"gpus":[{"index":0,"uuid":"GPU-a","name":"A","total_mb":16000,"free_mb":4000},{"index":1,"uuid":"GPU-b","name":"B","total_mb":24000,"free_mb":18000}]}
  def test_selects_gpu_with_free_memory(self):
