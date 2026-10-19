@@ -1,0 +1,4 @@
+# Optional auto-rig stage only; do not install for default TripoSR workflow.
+# Install SkinTokens dependencies using the exact upstream README/CUDA matrix:
+# https://github.com/VAST-AI-Research/SkinTokens
+# The local LLM helper uses Python standard library; Ollama or LM Studio runs separately.
