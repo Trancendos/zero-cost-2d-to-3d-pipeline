@@ -49,6 +49,8 @@ def run_rig(input_path,output_path,skintokens_dir,seed=42,use_transfer=True,use_
     if src.suffix.lower() not in {".glb",".obj",".fbx"} or not src.is_file(): return {"success":False,"error":"Input must be an existing GLB, OBJ, or FBX file."}
     if not (engine/"demo.py").is_file(): return {"success":False,"error":f"SkinTokens demo.py not found: {engine}"}
     if out.exists() and not overwrite: return {"success":False,"error":"Output exists; pass --overwrite to replace it."}
+    sidecar=out.with_suffix(".rig.json"); manifest=out.with_name(out.stem+".asset-manifest.json")
+    if not overwrite and (sidecar.exists() or manifest.exists()): return {"success":False,"error":"Sidecar/manifest already exists; choose another output or use --overwrite."}
     ok,msg,hardware=require_vram()
     if not ok: return {"success":False,"error":msg,"hardware":hardware}
     ckpt=engine/DEFAULT_CKPT
