@@ -1,0 +1,34 @@
+name: SkinTokens rig contract
+on:
+  pull_request:
+    paths:
+      - 'scripts/hardware_gate.py'
+      - 'scripts/local_llm_rig_assist.py'
+      - 'scripts/rig_with_skintokens.py'
+      - 'scripts/gradio_rig_tab.py'
+      - 'tests/test_skintokens_contract.py'
+      - 'docs/auto_rigging_skintokens.md'
+      - '.github/workflows/aaf-skintokens-rig-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: skintokens-rig-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m compileall -q scripts tests
+      - name: Contract tests
+        run: python -m unittest discover -s tests -p 'test_skintokens_contract.py' -v
+      - name: CLI smoke test
+        run: python scripts/rig_with_skintokens.py --help
