@@ -8,6 +8,7 @@ on:
       - 'scripts/gradio_rig_tab.py'
       - 'tests/test_skintokens_contract.py'
       - 'docs/auto_rigging_skintokens.md'
+      - 'schemas/asset-manifest.schema.json'
       - '.github/workflows/aaf-skintokens-rig-contract.yml'
   workflow_dispatch:
 permissions:
