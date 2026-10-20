@@ -1,0 +1,15 @@
+{
+  "name": "aaf-adaptive-core",
+  "version": "0.4.0",
+  "private": true,
+  "description": "AAF Phase 1 adaptive logic: execution profiling, routing, self-healing recovery, dual validation gates, provenance passport.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node dist/adaptive_core.test.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0"
+  }
+}
